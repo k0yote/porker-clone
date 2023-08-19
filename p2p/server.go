@@ -40,11 +40,11 @@ type Server struct {
 
 	transport   *TCPTransport
 	peerLock    sync.RWMutex
-	peers       map[net.Addr]*Peer
+	peers       map[string]*Peer
 	addPeer     chan *Peer
 	delPeer     chan *Peer
 	msgCh       chan *Message
-	broadcastCh chan any
+	broadcastCh chan BroadcastTo
 
 	gameState *GameState
 }
@@ -52,11 +52,11 @@ type Server struct {
 func NewServer(cfg ServerConfig) *Server {
 	s := &Server{
 		ServerConfig: cfg,
-		peers:        make(map[net.Addr]*Peer),
+		peers:        make(map[string]*Peer),
 		addPeer:      make(chan *Peer, 20),
 		delPeer:      make(chan *Peer),
-		msgCh:        make(chan *Message),
-		broadcastCh:  make(chan any),
+		msgCh:        make(chan *Message, 100),
+		broadcastCh:  make(chan BroadcastTo, 100),
 	}
 	s.gameState = NewGameState(s.ListenAddr, s.broadcastCh)
 
@@ -79,16 +79,7 @@ func (s *Server) Start() {
 	logrus.WithFields(logrus.Fields{
 		"port":    s.ListenAddr,
 		"variant": s.GameVariant,
-		// "gameStatus": s.gameState.gameStatus,
 	}).Info("game server started")
-
-	go func() {
-		msg := <-s.broadcastCh
-		logrus.Info("broadcasting to all peers")
-		if err := s.Broadcast(msg); err != nil {
-			logrus.Errorf("broadcast error: %s", err)
-		}
-	}()
 
 	s.transport.ListenAndAccept()
 }
@@ -124,7 +115,7 @@ func (s *Server) AddPeer(p *Peer) {
 	s.peerLock.Lock()
 	defer s.peerLock.Unlock()
 
-	s.peers[p.conn.RemoteAddr()] = p
+	s.peers[p.listenAddr] = p
 }
 
 func (s *Server) Peers() []string {
@@ -192,12 +183,19 @@ func (s *Server) Connect(addr string) error {
 func (s *Server) loop() {
 	for {
 		select {
+		case msg := <-s.broadcastCh:
+			logrus.Info("broadcasting to all peers")
+
+			if err := s.Broadcast(msg); err != nil {
+				logrus.Errorf("broadcast error: %s", err)
+			}
+
 		case peer := <-s.delPeer:
 			logrus.WithFields(logrus.Fields{
 				"addr": peer.conn.RemoteAddr(),
 			}).Info("player disconnected")
 
-			delete(s.peers, peer.conn.RemoteAddr())
+			delete(s.peers, peer.conn.RemoteAddr().String())
 
 		case peer := <-s.addPeer:
 			if err := s.handleNewPeer(peer); err != nil {
@@ -205,9 +203,11 @@ func (s *Server) loop() {
 			}
 
 		case msg := <-s.msgCh:
-			if err := s.handleMessage(msg); err != nil {
-				logrus.Errorf("handle msg error: %s", err)
-			}
+			go func() {
+				if err := s.handleMessage(msg); err != nil {
+					logrus.Errorf("handle msg error: %s", err)
+				}
+			}()
 		}
 	}
 }
@@ -216,7 +216,7 @@ func (s *Server) handleNewPeer(peer *Peer) error {
 	hs, err := s.handshake(peer)
 	if err != nil {
 		peer.conn.Close()
-		delete(s.peers, peer.conn.RemoteAddr())
+		delete(s.peers, peer.conn.RemoteAddr().String())
 
 		return fmt.Errorf("%s:handshake with incoming player failed: %v", s.ListenAddr, err)
 	}
@@ -226,7 +226,7 @@ func (s *Server) handleNewPeer(peer *Peer) error {
 	if !peer.outbound {
 		if err := s.SendHandshake(peer); err != nil {
 			peer.conn.Close()
-			delete(s.peers, peer.conn.RemoteAddr())
+			delete(s.peers, peer.conn.RemoteAddr().String())
 
 			return fmt.Errorf("failed to send handshake with peer: %v", err)
 		}
@@ -254,26 +254,42 @@ func (s *Server) handleNewPeer(peer *Peer) error {
 	return nil
 }
 
-func (s *Server) Broadcast(payload any) error {
-	msg := NewMessage(s.ListenAddr, payload)
+func (s *Server) Broadcast(broadcastMsg BroadcastTo) error {
+	msg := NewMessage(s.ListenAddr, broadcastMsg.Payload)
 
 	buf := new(bytes.Buffer)
 	if err := gob.NewEncoder(buf).Encode(msg); err != nil {
 		return err
 	}
 
-	for _, peer := range s.peers {
-		go func(peer *Peer) {
-			if err := peer.Send(buf.Bytes()); err != nil {
-				logrus.Errorf("broadcast to peer error: %s", err)
-			}
-			logrus.WithFields(logrus.Fields{
-				"we":   s.ListenAddr,
-				"peer": peer.listenAddr,
-			}).Info("broadcast to peer")
-		}(peer)
+	for _, addr := range broadcastMsg.To {
+		peer, ok := s.peers[addr]
+		if ok {
+			go func(peer *Peer) {
+				if err := peer.Send(buf.Bytes()); err != nil {
+					logrus.Errorf("broadcast to peer error: %s", err)
+				}
 
+				logrus.WithFields(logrus.Fields{
+					"we":   s.ListenAddr,
+					"peer": peer.listenAddr,
+				}).Info("sending msg to peer")
+			}(peer)
+		}
 	}
+
+	// for _, peer := range s.peers {
+	// 	go func(peer *Peer) {
+	// 		if err := peer.Send(buf.Bytes()); err != nil {
+	// 			logrus.Errorf("broadcast to peer error: %s", err)
+	// 		}
+	// 		logrus.WithFields(logrus.Fields{
+	// 			"we":   s.ListenAddr,
+	// 			"peer": peer.listenAddr,
+	// 		}).Info("broadcast to peer")
+	// 	}(peer)
+
+	// }
 
 	return nil
 }
@@ -301,13 +317,22 @@ func (s *Server) handleMessage(msg *Message) error {
 	switch v := msg.Payload.(type) {
 	case MessagePeerList:
 		return s.handlePeerList(v)
-	case MessageCards:
-		fmt.Printf("%s: received msg cards from (%s) %+v\n", s.ListenAddr, msg.From, msg.Payload)
+	case MessageEncDeck:
+		s.handleEncDeck(msg.From, v)
+		s.gameState.SetStatus(GameStatusReceivingCards)
 
-		s.gameState.SetStatus(GameStatusWaitingForCards)
 	}
 
 	return nil
+}
+
+func (s *Server) handleEncDeck(from string, msg MessageEncDeck) error {
+	logrus.WithFields(logrus.Fields{
+		"we":   s.ListenAddr,
+		"from": from,
+	}).Info("received enc deck")
+
+	return s.gameState.ShuffleAndEncrypt(from, msg.Deck)
 }
 
 func (s *Server) handlePeerList(l MessagePeerList) error {
@@ -327,5 +352,5 @@ func (s *Server) handlePeerList(l MessagePeerList) error {
 
 func init() {
 	gob.Register(MessagePeerList{})
-	gob.Register(MessageCards{})
+	gob.Register(MessageEncDeck{})
 }

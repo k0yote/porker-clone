@@ -33,7 +33,7 @@ func main() {
 
 	time.Sleep(200 * time.Millisecond)
 	playerB.Connect(playerA.ListenAddr)
-	time.Sleep(200 * time.Millisecond)
+	// time.Sleep(200 * time.Millisecond)
 	playerC.Connect(playerB.ListenAddr)
 	// time.Sleep(200 * time.Millisecond)
 	// playerD.Connect(playerC.ListenAddr)
