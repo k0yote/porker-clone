@@ -38,13 +38,17 @@ func (s *APIServer) Run() {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/ready", makeHTTPHandleFunc(s.handlePlayerReady))
+	r.HandleFunc("/fold", makeHTTPHandleFunc(s.handlePlayerFold))
 
 	http.ListenAndServe(s.listenAddr, r)
 }
 
+func (s *APIServer) handlePlayerFold(w http.ResponseWriter, r *http.Request) error {
+	s.game.Fold()
+	return JSON(w, http.StatusOK, []byte("FOLDED"))
+}
+
 func (s *APIServer) handlePlayerReady(w http.ResponseWriter, r *http.Request) error {
 	s.game.SetReady()
-	vars := mux.Vars(r)
-
-	return JSON(w, http.StatusOK, vars)
+	return JSON(w, http.StatusOK, []byte("READY"))
 }

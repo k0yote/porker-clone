@@ -313,13 +313,33 @@ func (s *Server) handshake(p *Peer) (*Handshake, error) {
 
 func (s *Server) handleMessage(msg *Message) error {
 	switch v := msg.Payload.(type) {
+	case MessagePreFlop:
+		return s.handleMsgPreFlop(msg.From)
 	case MessagePeerList:
 		return s.handlePeerList(v)
 	case MessageEncDeck:
 		s.handleMsgEncDeck(msg.From, v)
 	case MessageReady:
 		s.handleMsgReady(msg.From)
+	case MessagePlayerAction:
+		s.handleGetMsgPlayerAction(msg.From, v)
+
 	}
+
+	return nil
+}
+
+func (s *Server) handleGetMsgPlayerAction(from string, msg MessagePlayerAction) error {
+	logrus.WithFields(logrus.Fields{
+		"from":   from,
+		"action": msg,
+		"we":     s.ListenAddr,
+	}).Info("received player action")
+	return nil
+}
+
+func (s *Server) handleMsgPreFlop(from string) error {
+	s.gameState.SetStatus(GameStatusPreFlop)
 
 	return nil
 }
@@ -358,4 +378,6 @@ func init() {
 	gob.Register(MessagePeerList{})
 	gob.Register(MessageEncDeck{})
 	gob.Register(MessageReady{})
+	gob.Register(MessagePreFlop{})
+	gob.Register(MessagePlayerAction{})
 }
