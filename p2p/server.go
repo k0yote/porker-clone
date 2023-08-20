@@ -278,19 +278,6 @@ func (s *Server) Broadcast(broadcastMsg BroadcastTo) error {
 		}
 	}
 
-	// for _, peer := range s.peers {
-	// 	go func(peer *Peer) {
-	// 		if err := peer.Send(buf.Bytes()); err != nil {
-	// 			logrus.Errorf("broadcast to peer error: %s", err)
-	// 		}
-	// 		logrus.WithFields(logrus.Fields{
-	// 			"we":   s.ListenAddr,
-	// 			"peer": peer.listenAddr,
-	// 		}).Info("broadcast to peer")
-	// 	}(peer)
-
-	// }
-
 	return nil
 }
 
@@ -319,7 +306,7 @@ func (s *Server) handleMessage(msg *Message) error {
 		return s.handlePeerList(v)
 	case MessageEncDeck:
 		s.handleEncDeck(msg.From, v)
-		s.gameState.SetStatus(GameStatusReceivingCards)
+		// s.gameState.SetStatus(GameStatusReceivingCards)
 
 	}
 
@@ -333,6 +320,7 @@ func (s *Server) handleEncDeck(from string, msg MessageEncDeck) error {
 	}).Info("received enc deck")
 
 	return s.gameState.ShuffleAndEncrypt(from, msg.Deck)
+	// return nil
 }
 
 func (s *Server) handlePeerList(l MessagePeerList) error {
