@@ -4,8 +4,10 @@ type GameStatus int32
 
 func (g GameStatus) String() string {
 	switch g {
-	case GameStatusWaitingForCards:
-		return "Waiting FOR CARDS"
+	case GameStatusConnected:
+		return "CONNECTED"
+	case GameStatusPlayerReady:
+		return "PLAYER READY"
 	case GameStatusShuffleAndDeal:
 		return "Shuffle And Deal"
 	case GameStatusReceivingCards:
@@ -26,7 +28,8 @@ func (g GameStatus) String() string {
 }
 
 const (
-	GameStatusWaitingForCards GameStatus = iota
+	GameStatusConnected GameStatus = iota
+	GameStatusPlayerReady
 	GameStatusShuffleAndDeal
 	GameStatusReceivingCards
 	GameStatusDealing

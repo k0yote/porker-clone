@@ -30,9 +30,10 @@ const (
 )
 
 type ServerConfig struct {
-	Version     string
-	ListenAddr  string
-	GameVariant GameVariant
+	Version       string
+	ListenAddr    string
+	APIListneAddr string
+	GameVariant   GameVariant
 }
 
 type Server struct {
@@ -46,7 +47,8 @@ type Server struct {
 	msgCh       chan *Message
 	broadcastCh chan BroadcastTo
 
-	gameState *GameState
+	// gameState *GameState
+	gameState *Game
 }
 
 func NewServer(cfg ServerConfig) *Server {
@@ -58,17 +60,27 @@ func NewServer(cfg ServerConfig) *Server {
 		msgCh:        make(chan *Message, 100),
 		broadcastCh:  make(chan BroadcastTo, 100),
 	}
-	s.gameState = NewGameState(s.ListenAddr, s.broadcastCh)
+	// s.gameState = NewGameState(s.ListenAddr, s.broadcastCh)
+	s.gameState = NewGame(s.ListenAddr, s.broadcastCh)
 
-	if s.ListenAddr == ":3000" {
-		s.gameState.isDealer = true
-	}
+	// if s.ListenAddr == ":3000" {
+	// 	s.gameState.isDealer = true
+	// }
 
 	tr := NewTCPTransport(s.ListenAddr)
 	s.transport = tr
 
 	tr.AddPeer = s.addPeer
 	tr.DelPeer = s.delPeer
+
+	go func(s *Server) {
+		apiServer := NewAPIServer(cfg.APIListneAddr, s.gameState)
+		go apiServer.Run()
+
+		logrus.WithFields(logrus.Fields{
+			"listenAddr": cfg.APIListneAddr,
+		}).Info("starting API server")
+	}(s)
 
 	return s
 }
@@ -137,7 +149,7 @@ func (s *Server) SendHandshake(p *Peer) error {
 	hs := &Handshake{
 		GameVariant: s.GameVariant,
 		Version:     s.Version,
-		GameStatus:  s.gameState.gameStatus,
+		GameStatus:  s.gameState.currentStatus,
 		ListenAddr:  s.ListenAddr,
 	}
 
@@ -246,11 +258,10 @@ func (s *Server) handleNewPeer(peer *Peer) error {
 		"listenAddr": peer.listenAddr,
 		"we":         s.ListenAddr,
 	}).Info("handshake successful: new player connected")
-
 	// s.peers[peer.conn.RemoteAddr()] = peer
 	s.AddPeer(peer)
+	s.gameState.AddPlayer(peer.listenAddr)
 
-	s.gameState.AddPlayer(peer.listenAddr, hs.GameStatus)
 	return nil
 }
 
@@ -319,8 +330,8 @@ func (s *Server) handleEncDeck(from string, msg MessageEncDeck) error {
 		"from": from,
 	}).Info("received enc deck")
 
-	return s.gameState.ShuffleAndEncrypt(from, msg.Deck)
-	// return nil
+	// return s.gameState.ShuffleAndEncrypt(from, msg.Deck)
+	return nil
 }
 
 func (s *Server) handlePeerList(l MessagePeerList) error {
@@ -341,4 +352,5 @@ func (s *Server) handlePeerList(l MessagePeerList) error {
 func init() {
 	gob.Register(MessagePeerList{})
 	gob.Register(MessageEncDeck{})
+	gob.Register(MessageReady{})
 }
