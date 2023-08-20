@@ -8,10 +8,10 @@ func (g GameStatus) String() string {
 		return "CONNECTED"
 	case GameStatusPlayerReady:
 		return "PLAYER READY"
-	case GameStatusShuffleAndDeal:
-		return "Shuffle And Deal"
-	case GameStatusReceivingCards:
-		return "Receiving CARDS"
+	// case GameStatusShuffleAndDeal:
+	// return "Shuffle And Deal"
+	// case GameStatusReceivingCards:
+	// 	return "Receiving CARDS"
 	case GameStatusDealing:
 		return "Dealing"
 	case GameStatusPreFlop:
@@ -30,8 +30,8 @@ func (g GameStatus) String() string {
 const (
 	GameStatusConnected GameStatus = iota
 	GameStatusPlayerReady
-	GameStatusShuffleAndDeal
-	GameStatusReceivingCards
+	// GameStatusShuffleAndDeal
+	// GameStatusReceivingCards
 	GameStatusDealing
 	GameStatusPreFlop
 	GameStatusFlop

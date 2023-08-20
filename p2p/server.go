@@ -316,22 +316,27 @@ func (s *Server) handleMessage(msg *Message) error {
 	case MessagePeerList:
 		return s.handlePeerList(v)
 	case MessageEncDeck:
-		s.handleEncDeck(msg.From, v)
-		// s.gameState.SetStatus(GameStatusReceivingCards)
-
+		s.handleMsgEncDeck(msg.From, v)
+	case MessageReady:
+		s.handleMsgReady(msg.From)
 	}
 
 	return nil
 }
 
-func (s *Server) handleEncDeck(from string, msg MessageEncDeck) error {
+func (s *Server) handleMsgReady(from string) error {
+	s.gameState.SetPlayerReady(from)
+	return nil
+}
+
+func (s *Server) handleMsgEncDeck(from string, msg MessageEncDeck) error {
 	logrus.WithFields(logrus.Fields{
 		"we":   s.ListenAddr,
 		"from": from,
 	}).Info("received enc deck")
 
-	// return s.gameState.ShuffleAndEncrypt(from, msg.Deck)
-	return nil
+	return s.gameState.ShuffleAndEncrypt(from, msg.Deck)
+	// return nil
 }
 
 func (s *Server) handlePeerList(l MessagePeerList) error {

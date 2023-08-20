@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/k0yote/k0porker/p2p"
@@ -29,19 +30,26 @@ func main() {
 	playerB := makeServerAndStart(":4000", ":4001")
 	playerC := makeServerAndStart(":5000", ":5001")
 	playerD := makeServerAndStart(":6000", ":6001")
-	// playerE := makeServerAndStart(":7000")
-	// playerF := makeServerAndStart(":8000")
+
+	go func() {
+		time.Sleep(3 * time.Second)
+		http.Get("http://localhost:3001/ready")
+		time.Sleep(3 * time.Second)
+		http.Get("http://localhost:4001/ready")
+		// time.Sleep(3 * time.Second)
+		// http.Get("http://localhost:5001/ready")
+		// time.Sleep(3 * time.Second)
+		// http.Get("http://localhost:6001/ready")
+	}()
 
 	time.Sleep(200 * time.Millisecond)
 	playerB.Connect(playerA.ListenAddr)
+
 	time.Sleep(200 * time.Millisecond)
 	playerC.Connect(playerB.ListenAddr)
+
 	time.Sleep(200 * time.Millisecond)
 	playerD.Connect(playerC.ListenAddr)
-	// time.Sleep(200 * time.Millisecond)
-	// playerE.Connect(playerD.ListenAddr)
-	// time.Sleep(200 * time.Millisecond)
-	// playerF.Connect(playerE.ListenAddr)
 
 	select {}
 }
