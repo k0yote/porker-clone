@@ -11,13 +11,32 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type PlayerAction byte
+type AtomicInt struct {
+	value int32
+}
 
-const (
-	PlayerActionFold PlayerAction = iota + 1
-	PlayerActionCheck
-	PlayerActionBet
-)
+func NewAtomicInt(value int32) *AtomicInt {
+	return &AtomicInt{
+		value: value,
+	}
+}
+
+func (a *AtomicInt) Set(value int32) {
+	atomic.StoreInt32(&a.value, value)
+}
+
+func (a *AtomicInt) Get() int32 {
+	return atomic.LoadInt32(&a.value)
+}
+
+func (a *AtomicInt) Inc() {
+	currentValue := a.Get()
+	a.Set(currentValue + 1)
+}
+
+func (a *AtomicInt) String() string {
+	return fmt.Sprintf("%d", a.value)
+}
 
 type PlayerActionRecv struct {
 	mu          sync.RWMutex
@@ -75,8 +94,8 @@ type Game struct {
 
 	currentStatus GameStatus
 
-	currentDealer     int32
-	currentPlayerTurn int32
+	currentDealer     *AtomicInt
+	currentPlayerTurn *AtomicInt
 
 	playersReady      *PlayersReady
 	recvPlayerActions *PlayerActionRecv
@@ -91,8 +110,9 @@ func NewGame(addr string, broadcastCh chan BroadcastTo) *Game {
 		currentStatus:     GameStatusConnected,
 		playersReady:      NewPlayersReady(),
 		playersList:       PlayersList{},
-		currentDealer:     0,
 		recvPlayerActions: NewPlayerActionRecv(),
+		currentPlayerTurn: NewAtomicInt(0),
+		currentDealer:     NewAtomicInt(0),
 	}
 
 	g.playersList = append(g.playersList, addr)
@@ -102,12 +122,12 @@ func NewGame(addr string, broadcastCh chan BroadcastTo) *Game {
 	return g
 }
 
-func (g *Game) setCurrentPlayerTurn(index int32) {
-	atomic.StoreInt32(&g.currentPlayerTurn, index)
-}
+// func (g *Game) setCurrentPlayerTurn(index int32) {
+// 	atomic.StoreInt32(&g.currentPlayerTurn, index)
+// }
 
 func (g *Game) canTakeAction(from string) bool {
-	currentPlayerAddr := g.playersList[g.currentPlayerTurn]
+	currentPlayerAddr := g.playersList[g.currentPlayerTurn.Get()]
 	return currentPlayerAddr == from
 }
 
@@ -123,14 +143,19 @@ func (g *Game) handlePlayerAction(from string, action MessagePlayerAction) error
 	}).Info("recv player action")
 
 	g.recvPlayerActions.addAction(from, action)
-	g.setCurrentPlayerTurn(g.currentPlayerTurn + 1)
+	g.currentPlayerTurn.Inc()
 
 	return nil
 }
 
 func (g *Game) Fold() {
+	if !g.canTakeAction(g.listenAddr) {
+		logrus.Errorf("i am taking action before its my turn %s", g.listenAddr)
+		return
+	}
+
 	g.SetStatus(GameStatusFolded)
-	g.setCurrentPlayerTurn(g.currentPlayerTurn + 1)
+	g.currentPlayerTurn.Inc()
 
 	g.sendToPlayers(MessagePlayerAction{
 		CurrentGameStatus: g.currentStatus,
@@ -144,7 +169,7 @@ func (g *Game) SetStatus(status GameStatus) {
 
 func (g *Game) setStatus(s GameStatus) {
 	if s == GameStatusPreFlop {
-		g.setCurrentPlayerTurn(g.currentDealer + 1)
+		g.currentPlayerTurn.Inc()
 	}
 
 	if g.currentStatus != s {
@@ -153,7 +178,7 @@ func (g *Game) setStatus(s GameStatus) {
 }
 
 func (g *Game) getCurrentDealerAddr() (string, bool) {
-	currentDealerAddr := g.playersList[g.currentDealer]
+	currentDealerAddr := g.playersList[g.currentDealer.Get()]
 
 	return currentDealerAddr, g.listenAddr == currentDealerAddr
 }
@@ -259,6 +284,7 @@ func (g *Game) loop() {
 			"we":             g.listenAddr,
 			"currentDealer":  currentDealer,
 			"nextPlayerTurn": g.currentPlayerTurn,
+			"playerActions":  g.recvPlayerActions.recvActions,
 		}).Info("new player joined")
 	}
 }
