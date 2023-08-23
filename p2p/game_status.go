@@ -11,7 +11,7 @@ func (pa PlayerAction) String() string {
 	case PlayerActionBet:
 		return "BET"
 	default:
-		return "INVALID ACTION"
+		return "IDLE"
 	}
 }
 
@@ -36,13 +36,13 @@ func (g GameStatus) String() string {
 	case GameStatusChecked:
 		return "CHECKED"
 	case GameStatusPreFlop:
-		return "Pre-Flop"
+		return "PRE FLOP"
 	case GameStatusFlop:
-		return "Flop"
+		return "FLOP"
 	case GameStatusTurn:
-		return "Turn"
+		return "TURN"
 	case GameStatusRiver:
-		return "River"
+		return "RIVER"
 	default:
 		return "unknown"
 	}

@@ -32,14 +32,7 @@ func main() {
 	playerD := makeServerAndStart(":6000", ":6001")
 
 	go func() {
-		time.Sleep(3 * time.Second)
-		http.Get("http://localhost:3001/ready")
-		time.Sleep(3 * time.Second)
-		http.Get("http://localhost:4001/ready")
-		// time.Sleep(3 * time.Second)
-		// http.Get("http://localhost:5001/ready")
-		// time.Sleep(3 * time.Second)
-		// http.Get("http://localhost:6001/ready")
+		requestAction()
 	}()
 
 	time.Sleep(200 * time.Millisecond)
@@ -52,4 +45,22 @@ func main() {
 	playerD.Connect(playerC.ListenAddr)
 
 	select {}
+}
+
+func requestAction() {
+	reqList := []string{
+		"http://localhost:3001/ready",
+		"http://localhost:4001/ready",
+		"http://localhost:5001/reay",
+		"http://localhost:6001/reay",
+		"http://localhost:3001/fold",
+		"http://localhost:4001/fold",
+		"http://localhost:5001/fold",
+		"http://localhost:6001/fold",
+	}
+
+	for _, action := range reqList {
+		time.Sleep(2 * time.Second)
+		http.Get(action)
+	}
 }

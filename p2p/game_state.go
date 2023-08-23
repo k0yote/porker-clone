@@ -125,12 +125,23 @@ func NewGame(addr string, broadcastCh chan BroadcastTo) *Game {
 	return g
 }
 
-// func (g *Game) setCurrentPlayerTurn(index int32) {
-// 	atomic.StoreInt32(&g.currentPlayerTurn, index)
-// }
+func (g *Game) getNextGameStatus() GameStatus {
+	switch GameStatus(g.currentStatus.Get()) {
+	case GameStatusPreFlop:
+		return GameStatusFlop
+	case GameStatusFlop:
+		return GameStatusTurn
+	case GameStatusTurn:
+		return GameStatusRiver
+	default:
+		panic("invalid game status")
+	}
+}
 
 func (g *Game) canTakeAction(from string) bool {
+	// currentPlayerAddr := g.playersList[g.currentPlayerTurn.Get()]
 	currentPlayerAddr := g.playersList[g.currentPlayerTurn.Get()]
+
 	return currentPlayerAddr == from
 }
 
@@ -139,14 +150,23 @@ func (g *Game) handlePlayerAction(from string, action MessagePlayerAction) error
 		return fmt.Errorf("player (%s) taking action before his turn", from)
 	}
 
+	if action.CurrentGameStatus != GameStatus(g.currentStatus.Get()) {
+		return fmt.Errorf("player (%s) has not the correct game status (%s)", from, action.CurrentGameStatus)
+	}
+
 	logrus.WithFields(logrus.Fields{
 		"we":     g.listenAddr,
 		"from":   from,
 		"action": action,
 	}).Info("recv player action")
 
+	if g.playersList[g.currentDealer.Get()] == from {
+		g.currentStatus.Set(int32(g.getNextGameStatus()))
+	}
+
 	g.recvPlayerActions.addAction(from, action)
-	g.currentPlayerTurn.Inc()
+
+	g.incNextPlayer()
 
 	return nil
 }
@@ -165,7 +185,11 @@ func (g *Game) TakeAction(action PlayerAction, value int) error {
 
 	// }
 
-	g.currentPlayerTurn.Inc()
+	g.incNextPlayer()
+
+	if g.listenAddr == g.playersList[g.currentDealer.Get()] {
+		g.currentStatus.Set(int32(g.getNextGameStatus()))
+	}
 
 	a := MessagePlayerAction{
 		CurrentGameStatus: GameStatus(g.currentStatus.Get()),
@@ -178,13 +202,22 @@ func (g *Game) TakeAction(action PlayerAction, value int) error {
 	return nil
 }
 
+func (g *Game) incNextPlayer() {
+	if len(g.playersList)-1 == int(g.currentPlayerTurn.Get()) {
+		g.currentPlayerTurn.Set(0)
+		return
+	}
+
+	g.currentPlayerTurn.Inc()
+}
+
 func (g *Game) SetStatus(status GameStatus) {
 	g.setStatus(status)
 }
 
 func (g *Game) setStatus(s GameStatus) {
 	if s == GameStatusPreFlop {
-		g.currentPlayerTurn.Inc()
+		g.incNextPlayer()
 	}
 
 	if GameStatus(g.currentStatus.Get()) != s {
