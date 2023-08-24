@@ -196,8 +196,6 @@ func (s *Server) loop() {
 	for {
 		select {
 		case msg := <-s.broadcastCh:
-			logrus.Info("broadcasting to all peers")
-
 			if err := s.Broadcast(msg); err != nil {
 				logrus.Errorf("broadcast error: %s", err)
 			}
@@ -280,11 +278,6 @@ func (s *Server) Broadcast(broadcastMsg BroadcastTo) error {
 				if err := peer.Send(buf.Bytes()); err != nil {
 					logrus.Errorf("broadcast to peer error: %s", err)
 				}
-
-				logrus.WithFields(logrus.Fields{
-					"we":   s.ListenAddr,
-					"peer": peer.listenAddr,
-				}).Info("sending msg to peer")
 			}(peer)
 		}
 	}
@@ -354,7 +347,7 @@ func (s *Server) handleMsgEncDeck(from string, msg MessageEncDeck) error {
 	logrus.WithFields(logrus.Fields{
 		"we":   s.ListenAddr,
 		"from": from,
-	}).Info("received enc deck")
+	}) //.Info("received enc deck")
 
 	return s.gameState.ShuffleAndEncrypt(from, msg.Deck)
 	// return nil

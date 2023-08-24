@@ -56,6 +56,13 @@ func (pa *PlayerActionRecv) addAction(from string, action MessagePlayerAction) {
 	pa.recvActions[from] = action
 }
 
+func (pa *PlayerActionRecv) clear() {
+	pa.mu.Lock()
+	defer pa.mu.Unlock()
+
+	pa.recvActions = make(map[string]MessagePlayerAction)
+}
+
 type PlayersReady struct {
 	mu         sync.RWMutex
 	recvStatus map[string]bool
@@ -145,28 +152,32 @@ func (g *Game) canTakeAction(from string) bool {
 	return currentPlayerAddr == from
 }
 
+func (g *Game) isFromCurrentDealer(from string) bool {
+	return g.playersList[g.currentDealer.Get()] == from
+}
+
 func (g *Game) handlePlayerAction(from string, action MessagePlayerAction) error {
 	if !g.canTakeAction(from) {
 		return fmt.Errorf("player (%s) taking action before his turn", from)
 	}
 
-	if action.CurrentGameStatus != GameStatus(g.currentStatus.Get()) {
+	if action.CurrentGameStatus != GameStatus(g.currentStatus.Get()) && !g.isFromCurrentDealer(from) {
 		return fmt.Errorf("player (%s) has not the correct game status (%s)", from, action.CurrentGameStatus)
 	}
+
+	g.recvPlayerActions.addAction(from, action)
+
+	if g.playersList[g.currentDealer.Get()] == from {
+		g.advanceToNextRound()
+	}
+
+	g.incNextPlayer()
 
 	logrus.WithFields(logrus.Fields{
 		"we":     g.listenAddr,
 		"from":   from,
 		"action": action,
 	}).Info("recv player action")
-
-	if g.playersList[g.currentDealer.Get()] == from {
-		g.currentStatus.Set(int32(g.getNextGameStatus()))
-	}
-
-	g.recvPlayerActions.addAction(from, action)
-
-	g.incNextPlayer()
 
 	return nil
 }
@@ -188,7 +199,7 @@ func (g *Game) TakeAction(action PlayerAction, value int) error {
 	g.incNextPlayer()
 
 	if g.listenAddr == g.playersList[g.currentDealer.Get()] {
-		g.currentStatus.Set(int32(g.getNextGameStatus()))
+		g.advanceToNextRound()
 	}
 
 	a := MessagePlayerAction{
@@ -200,6 +211,12 @@ func (g *Game) TakeAction(action PlayerAction, value int) error {
 	g.sendToPlayers(a, g.getOtherPlayers()...)
 
 	return nil
+}
+
+func (g *Game) advanceToNextRound() {
+	g.recvPlayerActions.clear()
+	g.currentPlayerAction.Set(int32(PlayerActionIdle))
+	g.currentStatus.Set(int32(g.getNextGameStatus()))
 }
 
 func (g *Game) incNextPlayer() {
@@ -235,7 +252,7 @@ func (g *Game) SetPlayerReady(from string) {
 	logrus.WithFields(logrus.Fields{
 		"websocket": g.listenAddr,
 		"player":    from,
-	}).Info("setting player status to ready")
+	}) //.Info("setting player status to ready")
 
 	g.playersReady.addRecvStatus(from)
 
@@ -246,8 +263,6 @@ func (g *Game) SetPlayerReady(from string) {
 	//g.playersReady.clear()
 
 	if _, ok := g.getCurrentDealerAddr(); ok {
-		// fmt.Println("round can be started we hanve players: ", g.playersReady.len())
-		// fmt.Println("we are the dealer: ", g.listenAddr)
 		g.InitiateShuffleAndDeal()
 	}
 
@@ -282,6 +297,16 @@ func (g *Game) ShuffleAndEncrypt(from string, deck [][]byte) error {
 }
 
 func (g *Game) InitiateShuffleAndDeal() {
+	fmt.Println("================================")
+	fmt.Println("================================")
+	fmt.Println("================================")
+	fmt.Println("================================")
+	fmt.Println(g.listenAddr)
+	fmt.Println("================================")
+	fmt.Println("================================")
+	fmt.Println("================================")
+	fmt.Println("================================")
+
 	dealToPlayerAddr := g.playersList[g.getNextPositionOnTable()]
 	g.setStatus(GameStatusDealing)
 	g.sendToPlayers(MessageEncDeck{Deck: [][]byte{}}, dealToPlayerAddr)
@@ -308,15 +333,13 @@ func (g *Game) sendToPlayers(payload any, addr ...string) {
 		"payload": payload,
 		"player":  addr,
 		"we":      g.listenAddr,
-	}).Info("sending payload to player")
+	}) //.Info("sending payload to player")
 
 }
 
 func (g *Game) AddPlayer(from string) {
 	g.playersList = append(g.playersList, from)
 	sort.Sort(g.playersList)
-
-	// g.playersReady.addRecvStatus(from)
 }
 
 func (g *Game) loop() {
@@ -326,7 +349,6 @@ func (g *Game) loop() {
 
 		currentDealer, _ := g.getCurrentDealerAddr()
 		logrus.WithFields(logrus.Fields{
-			"action":              PlayerActionFold,
 			"players":             g.playersList,
 			"gameStatus":          GameStatus(g.currentStatus.Get()),
 			"we":                  g.listenAddr,
@@ -371,6 +393,10 @@ func (g *Game) getPositionOnTable() int {
 
 	panic("player does not exist in the playersList; that should not happen")
 }
+
+// func (g *Game) getNextDealer() int {
+
+// }
 
 func (g *Game) getNextPositionOnTable() int {
 	ourPosition := g.getPositionOnTable()
