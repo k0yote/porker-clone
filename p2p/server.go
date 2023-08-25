@@ -11,6 +11,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const defaultMaxPlayers = 6
+
 type GameVariant uint16
 
 func (gv GameVariant) String() string {
@@ -34,6 +36,7 @@ type ServerConfig struct {
 	ListenAddr    string
 	APIListneAddr string
 	GameVariant   GameVariant
+	MaxPlayers    int
 }
 
 type Server struct {
@@ -52,6 +55,10 @@ type Server struct {
 }
 
 func NewServer(cfg ServerConfig) *Server {
+	if cfg.MaxPlayers == 0 {
+		cfg.MaxPlayers = defaultMaxPlayers
+	}
+
 	s := &Server{
 		ServerConfig: cfg,
 		peers:        make(map[string]*Peer),
@@ -89,8 +96,9 @@ func (s *Server) Start() {
 	go s.loop()
 
 	logrus.WithFields(logrus.Fields{
-		"port":    s.ListenAddr,
-		"variant": s.GameVariant,
+		"port":       s.ListenAddr,
+		"variant":    s.GameVariant,
+		"maxPlayers": s.MaxPlayers,
 	}).Info("game server started")
 
 	s.transport.ListenAndAccept()
@@ -286,6 +294,10 @@ func (s *Server) Broadcast(broadcastMsg BroadcastTo) error {
 }
 
 func (s *Server) handshake(p *Peer) (*Handshake, error) {
+	if len(s.peers) > s.MaxPlayers {
+		return nil, fmt.Errorf("max players reached (%d)", s.MaxPlayers)
+	}
+
 	hs := &Handshake{}
 
 	if err := gob.NewDecoder(p.conn).Decode(hs); err != nil {
