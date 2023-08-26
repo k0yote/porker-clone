@@ -18,10 +18,10 @@ func TestTablePlayers(t *testing.T) {
 		assert.Nil(t, table.AddPlayer(strconv.Itoa(i)))
 	}
 
-	assert.Equal(t, maxSeats, table.lenPlayers())
+	assert.Equal(t, maxSeats, table.LenPlayers())
 
 	table.RemovePlayerByAddr("1")
-	assert.Equal(t, maxSeats-1, table.lenPlayers())
+	assert.Equal(t, maxSeats-1, table.LenPlayers())
 }
 
 func TestTablePlayerBefore(t *testing.T) {
@@ -89,7 +89,7 @@ func TestTableRemovePlayer(t *testing.T) {
 		assert.Nil(t, player)
 	}
 
-	assert.Equal(t, 0, table.lenPlayers())
+	assert.Equal(t, 0, table.LenPlayers())
 }
 
 func TestTableAddPlayer(t *testing.T) {
@@ -99,10 +99,10 @@ func TestTableAddPlayer(t *testing.T) {
 	)
 
 	assert.Nil(t, table.AddPlayer(":1"))
-	assert.Equal(t, 1, table.lenPlayers())
+	assert.Equal(t, 1, table.LenPlayers())
 
 	assert.NotNil(t, table.AddPlayer(":2"))
-	assert.Equal(t, 1, table.lenPlayers())
+	assert.Equal(t, 1, table.LenPlayers())
 }
 
 func TestTableGetPlayer(t *testing.T) {
@@ -119,5 +119,5 @@ func TestTableGetPlayer(t *testing.T) {
 		assert.Equal(t, player.addr, addr)
 	}
 
-	assert.Equal(t, maxSeats, table.lenPlayers())
+	assert.Equal(t, maxSeats, table.LenPlayers())
 }

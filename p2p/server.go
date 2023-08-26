@@ -204,10 +204,11 @@ func (s *Server) loop() {
 	for {
 		select {
 		case msg := <-s.broadcastCh:
-			if err := s.Broadcast(msg); err != nil {
-				logrus.Errorf("broadcast error: %s", err)
-			}
-
+			go func() {
+				if err := s.Broadcast(msg); err != nil {
+					logrus.Errorf("broadcast error: %s", err)
+				}
+			}()
 		case peer := <-s.delPeer:
 			logrus.WithFields(logrus.Fields{
 				"addr": peer.conn.RemoteAddr(),

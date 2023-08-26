@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -36,7 +37,15 @@ func NewTable(maxSeats int) *Table {
 }
 
 func (t *Table) String() string {
-	return fmt.Sprintf("%+v", t.seats)
+	parts := []string{}
+	for i := 0; i < t.LenPlayers(); i++ {
+		p, ok := t.seats[i]
+		if ok {
+			format := fmt.Sprintf("[%d %s %s %s]", p.tablePos, p.addr, p.gameStatus, p.currentAction)
+			parts = append(parts, format)
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 func (t *Table) Players() []*Player {
@@ -157,11 +166,41 @@ func (t *Table) getPlayer(addr string) (*Player, error) {
 	return nil, fmt.Errorf("player (%s) not on the table", addr)
 }
 
-func (t *Table) lenPlayers() int {
+func (t *Table) LenPlayers() int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
 	return len(t.seats)
+}
+
+func (t *Table) SetPlayerStatus(addr string, s GameStatus) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	p, err := t.getPlayer(addr)
+	if err != nil {
+		panic(err)
+	}
+
+	p.gameStatus = s
+}
+
+func (t *Table) AddPlayerOnPosition(addr string, pos int) error {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	if len(t.seats) == t.maxSeats {
+		return fmt.Errorf("player table is full")
+	}
+
+	// pos := t.getNextFreeSeat()
+	player := NewPlayer(addr)
+	player.tablePos = pos
+	player.gameStatus = GameStatusPlayerReady
+
+	t.seats[pos] = player
+
+	return nil
 }
 
 func (t *Table) AddPlayer(addr string) error {
@@ -175,6 +214,7 @@ func (t *Table) AddPlayer(addr string) error {
 	pos := t.getNextFreeSeat()
 	player := NewPlayer(addr)
 	player.tablePos = pos
+	player.gameStatus = GameStatusPlayerReady
 
 	t.seats[pos] = player
 
