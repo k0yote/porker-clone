@@ -50,29 +50,29 @@ func main() {
 func requestAction() {
 	reqList := []string{
 		"http://localhost:3001/ready",
-		"http://localhost:4001/ready",
+		// "http://localhost:4001/ready",
 		"http://localhost:5001/ready",
 		"http://localhost:6001/ready",
 
-		"http://localhost:4001/fold",
-		"http://localhost:5001/fold",
-		"http://localhost:6001/fold",
-		"http://localhost:3001/fold",
+		// "http://localhost:4001/fold",
+		// "http://localhost:5001/fold",
+		// "http://localhost:6001/fold",
+		// "http://localhost:3001/fold",
 
-		"http://localhost:4001/fold",
-		"http://localhost:5001/fold",
-		"http://localhost:6001/fold",
-		"http://localhost:3001/fold",
+		// "http://localhost:4001/fold",
+		// "http://localhost:5001/fold",
+		// "http://localhost:6001/fold",
+		// "http://localhost:3001/fold",
 
-		"http://localhost:4001/fold",
-		"http://localhost:5001/fold",
-		"http://localhost:6001/fold",
-		"http://localhost:3001/fold",
+		// "http://localhost:4001/fold",
+		// "http://localhost:5001/fold",
+		// "http://localhost:6001/fold",
+		// "http://localhost:3001/fold",
 
-		"http://localhost:4001/fold",
-		"http://localhost:5001/fold",
-		"http://localhost:6001/fold",
-		"http://localhost:3001/fold",
+		// "http://localhost:4001/fold",
+		// "http://localhost:5001/fold",
+		// "http://localhost:6001/fold",
+		// "http://localhost:3001/fold",
 	}
 
 	for _, action := range reqList {

@@ -51,7 +51,7 @@ type Server struct {
 	broadcastCh chan BroadcastTo
 
 	// gameState *GameState
-	gameState *Game
+	gameState *GameState
 }
 
 func NewServer(cfg ServerConfig) *Server {
