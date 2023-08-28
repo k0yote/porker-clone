@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/k0yote/k0porker/proto"
 	"github.com/sirupsen/logrus"
 )
 
@@ -52,6 +53,8 @@ type Server struct {
 
 	// gameState *GameState
 	gameState *GameState
+
+	proto.UnimplementedGossipServer
 }
 
 func NewServer(cfg ServerConfig) *Server {
