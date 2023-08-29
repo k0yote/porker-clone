@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/k0yote/k0porker/proto"
 	"github.com/sirupsen/logrus"
 )
 
@@ -21,7 +22,7 @@ type GameState struct {
 	table *Table
 }
 
-func NewGame(addr string, broadcastCh chan BroadcastTo) *GameState {
+func NewGameState(addr string, broadcastCh chan BroadcastTo) *GameState {
 	g := &GameState{
 		listenAddr:          addr,
 		broadcastCh:         broadcastCh,
@@ -117,7 +118,7 @@ func (g *GameState) advanceToNextRound() {
 	g.currentPlayerAction.Set(int32(PlayerActionNone))
 
 	if GameStatus(g.currentStatus.Get()) == GameStatusRiver {
-		g.SetReady()
+		g.TakeSeatAtTable()
 		return
 	}
 
@@ -217,7 +218,7 @@ func (g *GameState) maybeDeal() {
 	}
 }
 
-func (g *GameState) SetPlayerReady(addr string) {
+func (g *GameState) SetPlayerAtTable(addr string) {
 	tablePos := g.playersList.getIndex(addr)
 	g.table.AddPlayerOnPosition(addr, tablePos)
 
@@ -233,10 +234,12 @@ func (g *GameState) SetPlayerReady(addr string) {
 	}
 }
 
-func (g *GameState) SetReady() {
+func (g *GameState) TakeSeatAtTable() {
 	tablePos := g.playersList.getIndex(g.listenAddr)
 	g.table.AddPlayerOnPosition(g.listenAddr, tablePos)
-	g.sendToPlayers(MessageReady{}, g.getOtherPlayers()...)
+	g.sendToPlayers(&proto.TakeSeat{
+		Addr: g.listenAddr,
+	}, g.getOtherPlayers()...)
 	g.setStatus(GameStatusPlayerReady)
 }
 
@@ -271,7 +274,12 @@ func (g *GameState) loop() {
 			"currentDealer":  currentDealer,
 			"nextPlayerTurn": g.currentPlayerTurn,
 			// "table":          g.table,
-		}).Info("new player joined")
+		}).Info()
+
+		logrus.WithFields(logrus.Fields{
+			"we":    g.listenAddr,
+			"table": g.table,
+		}).Info()
 	}
 }
 

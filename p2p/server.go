@@ -70,12 +70,7 @@ func NewServer(cfg ServerConfig) *Server {
 		msgCh:        make(chan *Message, 100),
 		broadcastCh:  make(chan BroadcastTo, 100),
 	}
-	// s.gameState = NewGameState(s.ListenAddr, s.broadcastCh)
-	s.gameState = NewGame(s.ListenAddr, s.broadcastCh)
-
-	// if s.ListenAddr == ":3000" {
-	// 	s.gameState.isDealer = true
-	// }
+	s.gameState = NewGameState(s.ListenAddr, s.broadcastCh)
 
 	tr := NewTCPTransport(s.ListenAddr)
 	s.transport = tr
@@ -355,7 +350,7 @@ func (s *Server) handleMsgPreFlop(from string) error {
 }
 
 func (s *Server) handleMsgReady(from string) error {
-	s.gameState.SetPlayerReady(from)
+	s.gameState.SetPlayerAtTable(from)
 	return nil
 }
 

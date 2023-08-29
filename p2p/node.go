@@ -15,16 +15,23 @@ import (
 type Node struct {
 	ServerConfig
 
+	gameState *GameState
+
 	peerLock sync.RWMutex
-	peers    map[proto.GossipClient]*proto.Version
+	peers    map[string]proto.GossipClient
+
+	broadcastch chan BroadcastTo
 
 	proto.UnimplementedGossipServer
 }
 
 func NewNode(cfg ServerConfig) *Node {
+	broadcastch := make(chan BroadcastTo, 1024)
 	return &Node{
 		ServerConfig: cfg,
-		peers:        make(map[proto.GossipClient]*proto.Version),
+		peers:        make(map[string]proto.GossipClient),
+		broadcastch:  broadcastch,
+		gameState:    NewGameState(cfg.ListenAddr, broadcastch),
 	}
 }
 
@@ -43,12 +50,8 @@ func (n *Node) addPeer(c proto.GossipClient, v *proto.Version) {
 	n.peerLock.Lock()
 	defer n.peerLock.Unlock()
 
-	n.peers[c] = v
-
-	logrus.WithFields(logrus.Fields{
-		"we":     n.ListenAddr,
-		"remote": v.ListenAddr,
-	}).Info("new player connected")
+	n.peers[v.ListenAddr] = c
+	n.gameState.AddPlayer(v.ListenAddr)
 
 	go func() {
 		for _, addr := range v.PeerList {
@@ -58,6 +61,42 @@ func (n *Node) addPeer(c proto.GossipClient, v *proto.Version) {
 			}
 		}
 	}()
+}
+
+func (n *Node) HandleTakeSeat(ctx context.Context, v *proto.TakeSeat) (*proto.Ack, error) {
+	n.gameState.SetPlayerAtTable(v.Addr)
+	return &proto.Ack{}, nil
+}
+
+func (n *Node) broadcast(bct BroadcastTo) {
+	for _, addr := range bct.To {
+		go func(addr string) {
+			client, ok := n.peers[addr]
+			if !ok {
+				return
+			}
+
+			switch v := bct.Payload.(type) {
+			case *proto.TakeSeat:
+				_, err := client.HandleTakeSeat(context.TODO(), v)
+				if err != nil {
+					fmt.Printf("takeSeat broadcast error: %s\n", err)
+				}
+
+			case *proto.EncDeck:
+				_, err := client.HandleEncDeck(context.TODO(), v)
+				if err != nil {
+					fmt.Printf("encDeck broadcast error: %s\n", err)
+				}
+			}
+		}(addr)
+	}
+}
+
+func (n *Node) loop() {
+	for bt := range n.broadcastch {
+		n.broadcast(bt)
+	}
 }
 
 func (n *Node) getVersion() *proto.Version {
@@ -77,8 +116,8 @@ func (n *Node) getPeerList() []string {
 		i     = 0
 	)
 
-	for _, v := range n.peers {
-		peers[i] = v.ListenAddr
+	for addr := range n.peers {
+		peers[i] = addr
 		i++
 	}
 
@@ -90,8 +129,8 @@ func (n *Node) canConnectWith(addr string) bool {
 		return false
 	}
 
-	for _, v := range n.peers {
-		if v.ListenAddr == addr {
+	for peerAddr := range n.peers {
+		if peerAddr == addr {
 			return false
 		}
 	}
@@ -123,6 +162,8 @@ func (n *Node) Start() error {
 	grpcServer := grpc.NewServer()
 	proto.RegisterGossipServer(grpcServer, n)
 
+	go n.loop()
+
 	ln, err := net.Listen("tcp", n.ListenAddr)
 	if err != nil {
 		return err
@@ -132,7 +173,16 @@ func (n *Node) Start() error {
 		"port":       n.ListenAddr,
 		"variant":    n.GameVariant,
 		"maxPlayers": n.MaxPlayers,
-	}).Info("game porker server started")
+	}).Info("started new game porker server")
+
+	go func(n *Node) {
+		apiServer := NewAPIServer(n.APIListneAddr, n.gameState)
+		go apiServer.Run()
+
+		logrus.WithFields(logrus.Fields{
+			"listenAddr": n.APIListneAddr,
+		}).Info("starting API server")
+	}(n)
 
 	return grpcServer.Serve(ln)
 }

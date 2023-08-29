@@ -4,7 +4,11 @@ option go_package = "github.com/k0yote/k0porker/proto";
 
 service Gossip { 
     rpc Handshake(Version) returns (Version);
+    rpc HandleEncDeck(EncDeck) returns (Ack);
+    rpc HandleTakeSeat(TakeSeat) returns (Ack);
 }
+
+message Ack {}
 
 message Version {
     string version = 1;
@@ -12,4 +16,12 @@ message Version {
     int32 gameStatus = 3;
     string listenAddr = 4;
     repeated string peerList = 5;
+}
+
+message EncDeck {
+    repeated bytes deck = 1;
+}
+
+message TakeSeat {
+    string addr = 1;
 }
